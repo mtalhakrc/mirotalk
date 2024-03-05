@@ -1,7 +1,7 @@
 /*
 http://patorjk.com/software/taag/#p=display&f=ANSI%20Regular&t=Server
 
-███████ ███████ ██████  ██    ██ ███████ ██████  
+███████ ███████ ██████  ██    ██ ███████ ██████ 
 ██      ██      ██   ██ ██    ██ ██      ██   ██ 
 ███████ █████   ██████  ██    ██ █████   ██████  
      ██ ██      ██   ██  ██  ██  ██      ██   ██ 
@@ -111,7 +111,7 @@ const corsOptions = {
     methods: corsMethods,
 };
 
-/*  
+/*
     Set maxHttpBufferSize from 1e6 (1MB) to 1e7 (10MB)
 */
 const io = new Server({
@@ -349,36 +349,6 @@ app.get(['/'], (req, res) => {
     }
 });
 
-// Get stats endpoint
-app.get(['/stats'], (req, res) => {
-    //log.debug('Send stats', statsData);
-    res.send(statsData);
-});
-
-// mirotalk about
-app.get(['/about'], (req, res) => {
-    res.sendFile(views.about);
-});
-
-// set new room name and join
-app.get(['/newcall'], (req, res) => {
-    if (hostCfg.protected) {
-        const ip = getIP(req);
-        if (allowedIP(ip)) {
-            res.sendFile(views.newCall);
-        } else {
-            hostCfg.authenticated = false;
-            res.sendFile(views.login);
-        }
-    } else {
-        res.sendFile(views.newCall);
-    }
-});
-
-// privacy policy
-app.get(['/privacy'], (req, res) => {
-    res.sendFile(views.privacy);
-});
 
 // test Stun and Turn connections
 app.get(['/test'], (req, res) => {
@@ -392,7 +362,7 @@ app.get(['/test'], (req, res) => {
 app.get('/join/', (req, res) => {
     if (Object.keys(req.query).length > 0) {
         log.debug('Request Query', req.query);
-        /* 
+        /*
             http://localhost:3000/join?room=test&name=mirotalk&audio=1&video=1&screen=0&notify=0&hide=1&token=token
             https://p2p.mirotalk.com/join?room=test&name=mirotalk&audio=1&video=1&screen=0&notify=0&hide=0
             https://mirotalk.up.railway.app/join?room=test&name=mirotalk&audio=1&video=1&screen=0&notify=0&hide=0
@@ -460,62 +430,6 @@ app.get('/join/:roomId', function (req, res) {
     }
 });
 
-// Not specified correctly the room id
-app.get('/join/*', function (req, res) {
-    res.redirect('/');
-});
-
-// Login
-app.get(['/login'], (req, res) => {
-    res.sendFile(views.login);
-});
-
-// Logged
-app.get(['/logged'], (req, res) => {
-    const ip = getIP(req);
-    if (allowedIP(ip)) {
-        res.sendFile(views.landing);
-    } else {
-        hostCfg.authenticated = false;
-        res.sendFile(views.login);
-    }
-});
-
-/* AXIOS */
-
-// handle login on host protected
-app.post(['/login'], (req, res) => {
-    //
-    const ip = getIP(req);
-    log.debug(`Request login to host from: ${ip}`, req.body);
-
-    const { username, password } = checkXSS(req.body);
-
-    const isPeerValid = isAuthPeer(username, password);
-
-    // Peer valid going to auth as host
-    if (hostCfg.protected && isPeerValid && !hostCfg.authenticated) {
-        const ip = getIP(req);
-        hostCfg.authenticated = true;
-        authHost = new Host(ip, true);
-        log.debug('HOST LOGIN OK', { ip: ip, authorized: authHost.isAuthorized(ip) });
-        const token = jwt.sign({ username: username, password: password, presenter: true }, jwtCfg.JWT_KEY, {
-            expiresIn: jwtCfg.JWT_EXP,
-        });
-        return res.status(200).json({ message: token });
-    }
-
-    // Peer auth valid
-    if (isPeerValid) {
-        log.debug('PEER LOGIN OK', { ip: ip, authorized: true });
-        const token = jwt.sign({ username: username, password: password, presenter: false }, jwtCfg.JWT_KEY, {
-            expiresIn: jwtCfg.JWT_EXP,
-        });
-        return res.status(200).json({ message: token });
-    } else {
-        return res.status(401).json({ message: 'unauthorized' });
-    }
-});
 
 /**
     MiroTalk API v1

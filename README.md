@@ -386,3 +386,9 @@ Try also [MiroTalk WEB](https://github.com/miroslavpejic85/mirotalkwebrtc) a pla
 This project is tested with [BrowserStack](https://www.browserstack.com).
 
 ---
+
+otomatik kapanma olmayacak şuanda ama isterler mi bilmiyorum .
+
+process.env.PRESENTERS
+const views = {
+direct join olacak sadece
