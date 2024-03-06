@@ -70,6 +70,7 @@ const port = process.env.PORT || 3000; // must be the same to client.js signalin
 const host = `http${isHttps ? 's' : ''}://${domain}:${port}`;
 const homePage = "https://hesabim.turkishspeak.com";
 const webhookHost = process.env.WEBHOOK_HOST
+// const bodyParser = require('body-parser');
 
 
 let server, authHost;
@@ -420,8 +421,40 @@ app.get('/join/', (req, res) => {
     res.redirect(homePage);
 });
 
-app.get('/joinlink/:room', (req, res) => {
 
+app.post('/room', (req, res) => {
+    // create eder iken ile gelen credentiallara göre link create edicez.
+    const {name, room, username, password} = req.body
+    // eğer öğretmen ise presenter olacak
+    // kullancı adı şifre doğru mu?
+    const isAuth = isAuthPeer(username, password)
+    if (!isAuth){
+        return res.status(401).json({error: "Unauthorized"})
+    }
+    const isPresenter = isAuthPeerPresenter(username, password)
+    const payload ={
+        room: room,
+        name: name,
+        username: username,
+        password: password,
+        is_presenter: isPresenter
+    }
+    // jwt ile signleyelim.
+
+    //todo: bunu bir sor. üretildikten x zaman sonra expire olan linkler doğru mu?
+    const jwtToken = jwt.sign(payload, jwtCfg.JWT_KEY,{ expiresIn: jwtCfg.JWT_EXP });
+    const joinURL = host + '/join?token=' + jwtToken;
+    return res.status(200).json({joinURL: joinURL})
+
+
+
+    /*
+      "name": "John Doe",
+  "room": "talhanın dodası",
+  "iat": 1516239022,
+   "username":"student",
+   "password":"student-password"
+     */
 })
 
 /**
@@ -472,6 +505,10 @@ app.post('/slack', (req, res) => {
  */
 function getMeetingURL(host) {
     return 'http' + (host.includes('localhost') ? '' : 's') + '://' + host + '/join/' + uuidV4();
+}
+function getJoinURL(host, token) {
+    return 'http' + (host.includes('localhost') ? '' : 's') + '://' + host + '/join?=token=' + token;
+
 }
 
 // end of MiroTalk API v1
@@ -601,15 +638,15 @@ io.sockets.on('connect', async (socket) => {
         for (let channel in socket.channels) {
             await removePeerFrom(channel);
             removeIP(socket);
+            // eğer bu channelda peer kalmadı ise call end eventi gönder
+            if (!peers[channel]) {
+                log.debug('[' + socket.id + '] [Warning] No peer left in the channel', channel);
+                //callback
+            }
         }
         log.debug('[' + socket.id + '] disconnected', { reason: reason });
         delete sockets[socket.id];
 
-        // eğer hiçbir kimse kalmadı ise callback gönder.
-        if (Object.keys(peers).length === 0) {
-            log.debug('No peer left, send callback');
-            sendMeetingEndedCallback();
-        }
     });
 
     /**
@@ -1443,11 +1480,15 @@ function removeIP(socket) {
     }
 }
 
-function sendMeetingEndedCallback(room_id) {
+function sendMeetingEndedCallback(meeting_id) {
     // belirtilen url'e post request yapılacak
     const data = {
-        room_id: room_id,
+        meeting_id: meeting_id,
         event: "meeting.ended"
     }
-    axios.post(webhookHost, data)
+    try{
+        axios.post(webhookHost, data)
+    }catch (err){
+        log.error('sendMeetingEndedCallback', err);
+    }
 }
