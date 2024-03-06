@@ -69,6 +69,8 @@ const isHttps = process.env.HTTPS == 'true';
 const port = process.env.PORT || 3000; // must be the same to client.js signalingServerPort
 const host = `http${isHttps ? 's' : ''}://${domain}:${port}`;
 const homePage = "https://hesabim.turkishspeak.com";
+const webhookHost = process.env.WEBHOOK_HOST
+
 
 let server, authHost;
 
@@ -418,6 +420,10 @@ app.get('/join/', (req, res) => {
     res.redirect(homePage);
 });
 
+app.get('/joinlink/:room', (req, res) => {
+
+})
+
 /**
     MiroTalk API v1
     For api docs we use: https://swagger.io/
@@ -598,6 +604,12 @@ io.sockets.on('connect', async (socket) => {
         }
         log.debug('[' + socket.id + '] disconnected', { reason: reason });
         delete sockets[socket.id];
+
+        // eğer hiçbir kimse kalmadı ise callback gönder.
+        if (Object.keys(peers).length === 0) {
+            log.debug('No peer left, send callback');
+            sendMeetingEndedCallback();
+        }
     });
 
     /**
@@ -824,7 +836,6 @@ io.sockets.on('connect', async (socket) => {
                 active: redirectEnabled,
                 url: redirectURL,
             },
-            //...
         });
     });
 
@@ -1430,4 +1441,13 @@ function removeIP(socket) {
             log.debug('Remove IP from auth', { ip: ip });
         }
     }
+}
+
+function sendMeetingEndedCallback(room_id) {
+    // belirtilen url'e post request yapılacak
+    const data = {
+        room_id: room_id,
+        event: "meeting.ended"
+    }
+    axios.post(webhookHost, data)
 }
