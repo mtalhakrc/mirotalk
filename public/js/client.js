@@ -1,9 +1,9 @@
 /*
  ██████ ██      ██ ███████ ███    ██ ████████ 
 ██      ██      ██ ██      ████   ██    ██    
-██      ██      ██ █████   ██ ██  ██    ██    
-██      ██      ██ ██      ██  ██ ██    ██    
- ██████ ███████ ██ ███████ ██   ████    ██   
+██      ██      ██ █████   ██ ██  ██    ██ 
+██      ██      ██ ██      ██  ██ ██    ██ 
+ ██████ ███████ ██ ███████ ██   ████    ██ 
 */
 
 /**
@@ -918,10 +918,35 @@ function getSignalingServer() {
  * Generate random Room id if not set
  * @returns {string} Room Id
  */
+
+function parseJwt (token) {
+    var base64Url = token.split('.')[1];
+    var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+
+    return JSON.parse(jsonPayload);
+}
+
 function getRoomId() {
     // check if passed as params /join?room=id
+    // tokenden parseleyeceğiz.
+    // alert('getRoomId');
+
     let qs = new URLSearchParams(window.location.search);
-    let queryRoomId = filterXSS(qs.get('room'));
+    let token = filterXSS(qs.get('token'));
+    if (!token){
+        alert('Token yok');
+        return
+    }
+    const payload = parseJwt(token);
+    if (!payload.room){
+        alert('Room yok');
+        return
+    }
+    return payload.room;
+
 
     // skip /join/
     let roomId = queryRoomId ? queryRoomId : window.location.pathname.substring(6);
@@ -5407,7 +5432,7 @@ async function shareRoomUrl() {
             /*
             This feature is available only in secure contexts (HTTPS),
             in some or all supporting browsers and mobile devices
-            console.error("navigator.share", err); 
+            console.error("navigator.share", err);
             */
             console.error('Navigator share error', err);
 

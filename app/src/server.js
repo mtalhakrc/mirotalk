@@ -68,6 +68,7 @@ const domain = process.env.HOST || 'localhost';
 const isHttps = process.env.HTTPS == 'true';
 const port = process.env.PORT || 3000; // must be the same to client.js signalingServerPort
 const host = `http${isHttps ? 's' : ''}://${domain}:${port}`;
+const homePage = "https://hesabim.turkishspeak.com";
 
 let server, authHost;
 
@@ -204,6 +205,7 @@ const qS = require('qs');
 const slackEnabled = getEnvBoolean(process.env.SLACK_ENABLED);
 const slackSigningSecret = process.env.SLACK_SIGNING_SECRET;
 const bodyParser = require('body-parser');
+const {home} = require("nodemon/lib/utils");
 
 // Setup sentry client
 if (sentryEnabled) {
@@ -362,33 +364,32 @@ app.get(['/test'], (req, res) => {
 app.get('/join/', (req, res) => {
     if (Object.keys(req.query).length > 0) {
         log.debug('Request Query', req.query);
-        /*
-            http://localhost:3000/join?room=test&name=mirotalk&audio=1&video=1&screen=0&notify=0&hide=1&token=token
-            https://p2p.mirotalk.com/join?room=test&name=mirotalk&audio=1&video=1&screen=0&notify=0&hide=0
-            https://mirotalk.up.railway.app/join?room=test&name=mirotalk&audio=1&video=1&screen=0&notify=0&hide=0
-        */
-        const { room, name, audio, video, screen, notify, hide, token } = checkXSS(req.query);
+        // room ismini vs de jwt den alsak veya hepsini jwtden alsak daha iyi olacak gibi sanki
+        const { token } = checkXSS(req.query);
 
         let peerUsername,
             peerPassword = '';
         let isPeerValid = false;
         let isPeerPresenter = false;
+        let roomName
+        // bir kişinin presenter olup olmadığını daha önceden belirlemiş olduğumuz studentname-studentpassword, teachername-teacherpassword ile belirleyebiliriz.
 
-        if (token) {
-            try {
-                const { username, password, presenter } = checkXSS(jwt.verify(token, jwtCfg.JWT_KEY));
-                // Peer credentials
-                peerUsername = username;
-                peerPassword = password;
-                // Check if valid peer
-                isPeerValid = isAuthPeer(username, password);
-                // Check if presenter
-                isPeerPresenter = presenter === '1' || presenter === 'true';
-            } catch (err) {
-                // Invalid token
-                log.error('Direct Join JWT error', err.message);
-                return hostCfg.protected || hostCfg.user_auth ? res.sendFile(views.login) : res.sendFile(views.landing);
-            }
+        try {
+            const { room, username, password, name, audio, video} = checkXSS(jwt.verify(token, jwtCfg.JWT_KEY));
+            // presenter olması eğer öğretmen credentiallerini girmiş ise olur.
+            // Peer credentials
+            peerUsername = username;
+            peerPassword = password;
+            // Check if valid peer
+            isPeerValid = isAuthPeer(username, password);
+            // Check if presenter
+            // isPeerPresenter = presenter === '1' || presenter === 'true';
+            isPeerPresenter = isAuthPeerPresenter(username, password);
+            roomName = room
+        } catch (err) {
+            // Invalid token
+            log.error('Direct Join JWT error', err.message);
+            return res.redirect(homePage);
         }
 
         // Peer valid going to auth as host
@@ -404,77 +405,24 @@ app.get('/join/', (req, res) => {
         }
 
         // Check if peer authenticated or valid
-        if (room && (hostCfg.authenticated || isPeerValid)) {
+        if (roomName && (hostCfg.authenticated || isPeerValid)) {
             // only room mandatory
             return res.sendFile(views.client);
         } else {
-            return res.sendFile(views.login);
+            return res.redirect(homePage);
         }
     }
     if (hostCfg.protected) {
-        return res.sendFile(views.login);
+        return res.redirect(homePage);
     }
-    res.redirect('/');
+    res.redirect(homePage);
 });
-
-// Join Room by id
-app.get('/join/:roomId', function (req, res) {
-    // log.debug('Join to room', { roomId: req.params.roomId });
-    if (hostCfg.authenticated) {
-        res.sendFile(views.client);
-    } else {
-        if (hostCfg.protected) {
-            return res.sendFile(views.login);
-        }
-        res.redirect('/');
-    }
-});
-
 
 /**
     MiroTalk API v1
     For api docs we use: https://swagger.io/
 */
 
-// API request meeting room endpoint
-app.post([`${apiBasePath}/meeting`], (req, res) => {
-    const { host, authorization } = req.headers;
-    const api = new ServerApi(host, authorization, api_key_secret);
-    if (!api.isAuthorized()) {
-        log.debug('MiroTalk get meeting - Unauthorized', {
-            header: req.headers,
-            body: req.body,
-        });
-        return res.status(403).json({ error: 'Unauthorized!' });
-    }
-    const meetingURL = api.getMeetingURL();
-    res.json({ meeting: meetingURL });
-    log.debug('MiroTalk get meeting - Authorized', {
-        header: req.headers,
-        body: req.body,
-        meeting: meetingURL,
-    });
-});
-
-// API request join room endpoint
-app.post([`${apiBasePath}/join`], (req, res) => {
-    const { host, authorization } = req.headers;
-    const api = new ServerApi(host, authorization, api_key_secret);
-    if (!api.isAuthorized()) {
-        log.debug('MiroTalk get join - Unauthorized', {
-            header: req.headers,
-            body: req.body,
-        });
-        return res.status(403).json({ error: 'Unauthorized!' });
-    }
-    const joinURL = api.getJoinURL(req.body);
-    res.json({ join: joinURL });
-    log.debug('MiroTalk get join - Authorized', {
-        header: req.headers,
-        body: req.body,
-        join: joinURL,
-    });
-});
 
 /*
     MiroTalk Slack app v1
@@ -764,20 +712,24 @@ io.sockets.on('connect', async (socket) => {
         // no presenter aka host in presenters init
         if (!(channel in presenters)) presenters[channel] = {};
 
-        let is_presenter = true;
+        //default'ta presenter olmasın
+        let is_presenter = false;
 
         // User Auth required, we check if peer valid
         if (hostCfg.user_auth) {
             // Check JWT
             if (peer_token) {
                 try {
-                    const { username, password, presenter } = checkXSS(jwt.verify(peer_token, jwtCfg.JWT_KEY));
+                    const { username, password } = checkXSS(jwt.verify(peer_token, jwtCfg.JWT_KEY));
 
                     const isPeerValid = isAuthPeer(username, password);
 
                     // Presenter if token 'presenter' is '1'/'true' or first to join room
-                    is_presenter =
-                        presenter === '1' || presenter === 'true' || Object.keys(presenters[channel]).length === 0;
+
+                    is_presenter = isAuthPeerPresenter(username, password)
+
+
+                        // || Object.keys(presenters[channel]).length === 0;
 
                     log.debug('[' + socket.id + '] JOIN ROOM - USER AUTH check peer', {
                         ip: peer_ip,
@@ -816,14 +768,15 @@ io.sockets.on('connect', async (socket) => {
             is_presenter: is_presenter,
         };
         // first we check if the username match the presenters username
-        if (roomPresenters && roomPresenters.includes(peer_name)) {
+        if (roomPresenters && roomPresenters.includes(peer_name) || is_presenter)  {
             presenters[channel][socket.id] = presenter;
-        } else {
-            // if not match the presenters username, the first one join room is the presenter
-            if (Object.keys(presenters[channel]).length === 0) {
-                presenters[channel][socket.id] = presenter;
-            }
         }
+        // else {
+        //     if not match the presenters username, the first one join room is the presenter
+            // if (Object.keys(presenters[channel]).length === 0) {
+            //     presenters[channel][socket.id] = presenter;
+            // }
+        // }
 
         // Check if peer is presenter, if token check the presenter key
         const isPresenter = peer_token ? is_presenter : await isPeerPresenter(channel, socket.id, peer_name, peer_uuid);
@@ -1420,6 +1373,9 @@ async function isPeerPresenter(room_id, peer_id, peer_name, peer_uuid) {
  */
 function isAuthPeer(username, password) {
     return hostCfg.users && hostCfg.users.some((user) => user.username === username && user.password === password);
+}
+function isAuthPeerPresenter(username, password) {
+    return hostCfg.users && hostCfg.users.some((user) => user.username === username && user.password === password && user.presenter == "true");
 }
 
 /**
