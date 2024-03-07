@@ -14,7 +14,7 @@ class LocalStorage {
         };
 
         this.P2P_SETTINGS = {
-            share_on_join: true,
+            share_on_join: false,
             show_chat_on_msg: true,
             speech_in_msg: false,
             mic_auto_gain_control: false,

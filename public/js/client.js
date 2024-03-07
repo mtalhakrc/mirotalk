@@ -31,6 +31,10 @@ const myRoomId = getId('myRoomId');
 const roomId = getRoomId();
 const myRoomUrl = window.location.origin + '/join/' + roomId; // share room url
 
+
+const homePageURL = 'https://hesabim.turkishspeak.com';
+
+
 // Images
 const images = {
     confirmation: '../images/image-placeholder.png',
@@ -919,33 +923,53 @@ function getSignalingServer() {
  * @returns {string} Room Id
  */
 
-function parseJwt (token) {
+
+
+var tokenClaims;
+function getTokenClaims () {
+    if (tokenClaims){
+        return tokenClaims;
+    }
+    console.log(tokenClaims)
+    let qs = new URLSearchParams(window.location.search);
+    let token = filterXSS(qs.get('token'));
+    if (!token){
+        Swal.fire({
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            background: swBg,
+            imageUrl: images.forbidden,
+            title: 'Oops, Unauthorized',
+            text: 'The host has user authentication enabled',
+            confirmButtonText: `Login`,
+            showClass: { popup: 'animate__animated animate__fadeInDown' },
+            hideClass: { popup: 'animate__animated animate__fadeOutUp' },
+        }).then(() => {
+            // Login required to join room
+            openURL(homePageURL);
+        });
+    }
     var base64Url = token.split('.')[1];
     var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
         return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
 
-    return JSON.parse(jsonPayload);
+    if (tokenClaims){
+        return tokenClaims;
+    }
+    tokenClaims = JSON.parse(jsonPayload);
+    return tokenClaims;
 }
+
+
 
 function getRoomId() {
     // check if passed as params /join?room=id
     // tokenden parseleyeceğiz.
     // alert('getRoomId');
-
-    let qs = new URLSearchParams(window.location.search);
-    let token = filterXSS(qs.get('token'));
-    if (!token){
-        alert('Token yok');
-        return
-    }
-    const payload = parseJwt(token);
-    if (!payload.room){
-        alert('Room yok');
-        return
-    }
-    return payload.room;
+    const claims = getTokenClaims();
+    return claims.room;
 
 
     // skip /join/
@@ -1249,7 +1273,8 @@ function handleServerInfo(config) {
         handleRules(isPresenter);
     }
 
-    if (notify && peers_count == 1) {
+    // if (notify && peers_count == 1) {
+    if (notify) {
         shareRoomMeetingURL(true);
     } else {
         checkShareScreen();
@@ -1387,6 +1412,7 @@ function handleButtonsRule() {
  */
 async function whoAreYou() {
     console.log('11. Who are you?');
+    const claims = getTokenClaims();
 
     elemDisplay(loadingDiv, false);
     document.body.style.background = 'var(--body-bg)';
@@ -1437,12 +1463,13 @@ async function whoAreYou() {
         allowOutsideClick: false,
         allowEscapeKey: false,
         background: swBg,
-        title: 'MiroTalk P2P',
+        title: claims.room ? claims.room : '',
         position: 'center',
         input: 'text',
         inputPlaceholder: 'Enter your name',
         inputAttributes: { maxlength: 32 },
-        inputValue: window.localStorage.peer_name ? window.localStorage.peer_name : '',
+        // inputValue: window.localStorage.peer_name ? window.localStorage.peer_name : '',
+        inputValue: claims.name ? claims.name : '',
         html: initUser, // inject html
         confirmButtonText: `Join meeting`,
         customClass: { popup: 'init-modal-size' },

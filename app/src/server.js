@@ -378,7 +378,7 @@ app.get('/join/', (req, res) => {
         // bir kişinin presenter olup olmadığını daha önceden belirlemiş olduğumuz studentname-studentpassword, teachername-teacherpassword ile belirleyebiliriz.
 
         try {
-            const { room, username, password, name, audio, video} = checkXSS(jwt.verify(token, jwtCfg.JWT_KEY));
+            const { room, username, password, audio, video} = checkXSS(jwt.verify(token, jwtCfg.JWT_KEY));
             // presenter olması eğer öğretmen credentiallerini girmiş ise olur.
             // Peer credentials
             peerUsername = username;
@@ -422,40 +422,41 @@ app.get('/join/', (req, res) => {
 });
 
 
-app.post('/room', (req, res) => {
-    // create eder iken ile gelen credentiallara göre link create edicez.
-    const {name, room, username, password} = req.body
-    // eğer öğretmen ise presenter olacak
-    // kullancı adı şifre doğru mu?
-    const isAuth = isAuthPeer(username, password)
-    if (!isAuth){
-        return res.status(401).json({error: "Unauthorized"})
-    }
-    const isPresenter = isAuthPeerPresenter(username, password)
-    const payload ={
-        room: room,
-        name: name,
-        username: username,
-        password: password,
-        is_presenter: isPresenter
-    }
-    // jwt ile signleyelim.
-
-    //todo: bunu bir sor. üretildikten x zaman sonra expire olan linkler doğru mu?
-    const jwtToken = jwt.sign(payload, jwtCfg.JWT_KEY,{ expiresIn: jwtCfg.JWT_EXP });
-    const joinURL = host + '/join?token=' + jwtToken;
-    return res.status(200).json({joinURL: joinURL})
-
-
-
-    /*
-      "name": "John Doe",
-  "room": "talhanın dodası",
-  "iat": 1516239022,
-   "username":"student",
-   "password":"student-password"
-     */
-})
+// bunu backendde getJoinLink ile yapıcaz
+// app.post('/room', (req, res) => {
+//     // create eder iken ile gelen credentiallara göre link create edicez.
+//     const {name, room, username, password} = req.body
+//     // eğer öğretmen ise presenter olacak
+//     // kullancı adı şifre doğru mu?
+//     const isAuth = isAuthPeer(username, password)
+//     if (!isAuth){
+//         return res.status(401).json({error: "Unauthorized"})
+//     }
+//     const isPresenter = isAuthPeerPresenter(username, password)
+//     const payload ={
+//         room: room,
+//         name: name,
+//         username: username,
+//         password: password,
+//         is_presenter: isPresenter
+//     }
+//     // jwt ile signleyelim.
+//
+//     //todo: bunu bir sor. üretildikten x zaman sonra expire olan linkler doğru mu?
+//     const jwtToken = jwt.sign(payload, jwtCfg.JWT_KEY,{ expiresIn: jwtCfg.JWT_EXP });
+//     const joinURL = host + '/join?token=' + jwtToken;
+//     return res.status(200).json({joinURL: joinURL})
+//
+//
+//
+//     /*
+//       "name": "John Doe",
+//   "room": "talhanın dodası",
+//   "iat": 1516239022,
+//    "username":"student",
+//    "password":"student-password"
+//      */
+// })
 
 /**
     MiroTalk API v1
