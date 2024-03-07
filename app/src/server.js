@@ -69,7 +69,7 @@ const isHttps = process.env.HTTPS == 'true';
 const port = process.env.PORT || 3000; // must be the same to client.js signalingServerPort
 const host = `http${isHttps ? 's' : ''}://${domain}:${port}`;
 const homePage = "https://hesabim.turkishspeak.com";
-const webhookHost = process.env.WEBHOOK_HOST
+const meetingEndCallbackUrl = process.env.MEETING_END_CALLBACK_URL
 // const bodyParser = require('body-parser');
 
 
@@ -378,7 +378,7 @@ app.get('/join/', (req, res) => {
         // bir kişinin presenter olup olmadığını daha önceden belirlemiş olduğumuz studentname-studentpassword, teachername-teacherpassword ile belirleyebiliriz.
 
         try {
-            const { room, username, password, audio, video} = checkXSS(jwt.verify(token, jwtCfg.JWT_KEY));
+            const { room, username, password } = checkXSS(jwt.verify(token, jwtCfg.JWT_KEY));
             // presenter olması eğer öğretmen credentiallerini girmiş ise olur.
             // Peer credentials
             peerUsername = username;
@@ -642,7 +642,7 @@ io.sockets.on('connect', async (socket) => {
             // eğer bu channelda peer kalmadı ise call end eventi gönder
             if (!peers[channel]) {
                 log.debug('[' + socket.id + '] [Warning] No peer left in the channel', channel);
-                //callback
+                sendMeetingEndedCallback(channel)
             }
         }
         log.debug('[' + socket.id + '] disconnected', { reason: reason });
@@ -1482,14 +1482,11 @@ function removeIP(socket) {
 }
 
 function sendMeetingEndedCallback(meeting_id) {
-    // belirtilen url'e post request yapılacak
     const data = {
         meeting_id: meeting_id,
         event: "meeting.ended"
     }
-    try{
-        axios.post(webhookHost, data)
-    }catch (err){
-        log.error('sendMeetingEndedCallback', err);
-    }
+    axios.post(meetingEndCallbackUrl, data).catch((err)=> {
+        log.error('Meeting ended callback', err);
+    })
 }
